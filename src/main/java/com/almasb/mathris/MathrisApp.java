@@ -3,19 +3,20 @@ package com.almasb.mathris;
 import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
+import com.almasb.fxgl.core.math.FXGLMath;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
+import com.almasb.fxgl.gameplay.GameDifficulty;
 import com.almasb.fxgl.ui.FontType;
 import javafx.geometry.Point2D;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.paint.Color;
-import javafx.scene.shape.Line;
-import javafx.scene.shape.Rectangle;
-import javafx.scene.shape.StrokeType;
+import javafx.scene.shape.*;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
 
+import static com.almasb.mathris.Config.AI_DATA;
 import static com.almasb.mathris.Config.MAX_Y;
 import static com.almasb.mathris.EntityType.*;
 import static com.almasb.fxgl.dsl.FXGL.*;
@@ -25,7 +26,10 @@ import static com.almasb.fxgl.dsl.FXGL.*;
  */
 public class MathrisApp extends GameApplication {
 
-    private Text output;
+    private Text output1;
+    private Text output2;
+
+    private boolean isAIReadyToGuess;
 
     @Override
     protected void initSettings(GameSettings settings) {
@@ -36,45 +40,26 @@ public class MathrisApp extends GameApplication {
     @Override
     protected void initInput() {
         onKeyDown(KeyCode.BACK_SPACE, () -> {
-            if (output.getText().isEmpty())
+            if (output1.getText().isEmpty())
                 return;
 
-            output.setText(output.getText().substring(0, output.getText().length() - 1));
+            output1.setText(output1.getText().substring(0, output1.getText().length() - 1));
         });
 
         onKeyDown(KeyCode.ENTER, () -> {
-            var answer = output.getText();
+            var answer = output1.getText();
 
-            byType(BLOCK)
-                    .stream()
-                    // bottom row
-                    .filter(e -> e.getInt("y") == MAX_Y)
-                    .forEach(e -> {
-                        if (e.getString("answer").equals(answer)) {
-                            destroyBlock(e);
-                        }
-                    });
+            player1Guess(answer);
 
-
-            output.setText("");
+            output1.setText("");
         });
 
-        // TODO: duplicate
         onKeyDown(KeyCode.SPACE, () -> {
-            var answer = output.getText();
+            var answer = output1.getText();
 
-            byType(BLOCK)
-                    .stream()
-                    // bottom row
-                    .filter(e -> e.getInt("y") == MAX_Y)
-                    .forEach(e -> {
-                        if (e.getString("answer").equals(answer)) {
-                            destroyBlock(e);
-                        }
-                    });
+            player1Guess(answer);
 
-
-            output.setText("");
+            output1.setText("");
         });
 
         getInput().addEventHandler(KeyEvent.KEY_TYPED, event -> {
@@ -84,24 +69,44 @@ public class MathrisApp extends GameApplication {
             var ch = event.getCharacter().charAt(0);
 
             if (Character.isDigit(ch))
-                output.setText(output.getText() + event.getCharacter());
+                output1.setText(output1.getText() + event.getCharacter());
         });
     }
 
     @Override
     protected void initGame() {
+        isAIReadyToGuess = true;
+
         getGameScene().setBackgroundColor(Color.BLACK);
 
         getGameWorld().addEntityFactory(new MathrisFactory());
 
         for (int y = 0; y <= MAX_Y; y++) {
+
+            // player 1
             for (int x = 0; x < 6; x++) {
                 var a = random(1, 50);
                 var b = random(1, 50);
 
                 spawn("block",
-                        new SpawnData(80 + x * 120, y * 50)
+                        new SpawnData(40 + x * 120, y * 50)
                                 .put("color", Color.DARKGRAY)
+                                .put("x", x)
+                                .put("y", y)
+                                .put("question", "" + a + "+" + b)
+                                .put("answer", "" + (a+b))
+                        //.put("color", FXGLMath.randomColorHSB(0.4, 0.75))
+                );
+            }
+
+            // player 2
+            for (int x = 7; x < 13; x++) {
+                var a = random(1, 50);
+                var b = random(1, 50);
+
+                spawn("block",
+                        new SpawnData(40 + x * 120, y * 50)
+                                .put("color", Color.DARKSEAGREEN)
                                 .put("x", x)
                                 .put("y", y)
                                 .put("question", "" + a + "+" + b)
@@ -111,23 +116,24 @@ public class MathrisApp extends GameApplication {
             }
         }
 
-//        for (int y = 0; y < 15; y++) {
-//            for (int x = 7; x < 13; x++) {
-//                spawn("block",
-//                        new SpawnData(20 + x * 120, 40 + y * 50)
-//                                .put("color", Color.DARKSEAGREEN)
-//                                .put("y", y)
-//                        //.put("color", FXGLMath.randomColorHSB(0.4, 0.75))
-//                );
-//            }
-//        }
+        var aiData = AI_DATA.get(
+                GameDifficulty.NIGHTMARE
+                //getSettings().getGameDifficulty()
+        );
+
+        // start AI
+        run(() -> {
+            onUpdateAI(aiData);
+        }, Duration.seconds(aiData.guessInterval()));
     }
 
     @Override
     protected void initUI() {
-        output = getUIFactoryService().newText("", Color.WHITE, FontType.MONO, 22.0);
+        output1 = getUIFactoryService().newText("", Color.WHITE, FontType.MONO, 22.0);
+        output2 = getUIFactoryService().newText("", Color.WHITE, FontType.MONO, 22.0);
 
-        addUINode(output, 150, getAppHeight() - 70);
+        addUINode(output1, 150, getAppHeight() - 70);
+        addUINode(output2, 150 + 800, getAppHeight() - 70);
 
         var line = new Line(0, 0, 0, 20);
         line.setStroke(Color.WHITE);
@@ -141,10 +147,97 @@ public class MathrisApp extends GameApplication {
 
         addUINode(ui);
 
+        var ui2 = new PlayerUI();
 
-        var aiText = getUIFactoryService().newText("AI /\n2nd player goes here", Color.WHITE, FontType.MONO, 45.0);
+        addUINode(ui2, 840, 0);
 
-        addUINode(aiText, 900, 400);
+        for (int i = 0; i < 50; i++) {
+            var length = getAppHeight() / 50;
+
+            var separator = new Line(getAppWidth() / 2, i*length, getAppWidth() / 2, i*length + length);
+            separator.setStrokeWidth(6);
+            separator.setStrokeLineCap(StrokeLineCap.ROUND);
+            separator.setStrokeLineJoin(StrokeLineJoin.BEVEL);
+            separator.setStrokeType(StrokeType.CENTERED);
+            separator.setStroke(Color.hsb(90, 0.8, 0.9, 0.9));
+
+            animationBuilder()
+                    .delay(Duration.seconds(i * 0.09))
+                    .duration(Duration.seconds(0.5))
+                    .autoReverse(true)
+                    .repeatInfinitely()
+                    .interpolator(Interpolators.EXPONENTIAL.EASE_OUT())
+                    .animate(separator.strokeProperty())
+                    .from(separator.getStroke())
+                    .to(Color.BLUE)
+                    .buildAndPlay();
+
+            addUINode(separator);
+        }
+    }
+
+    private void onUpdateAI(AIPlayerData data) {
+        if (!isAIReadyToGuess)
+            return;
+
+        if (FXGLMath.randomBoolean(data.accuracy())) {
+            byType(BLOCK)
+                    .stream()
+                    // bottom row of player1
+                    .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") > 6)
+                    .findAny()
+                    .ifPresent(e -> {
+                        isAIReadyToGuess = false;
+                        animateAI(e.getString("answer"));
+                    });
+        } else {
+            isAIReadyToGuess = false;
+            animateAI("" + FXGLMath.random(1, 9999));
+        }
+    }
+
+    private void animateAI(String guess) {
+        for (int i = 0; i < guess.length(); i++) {
+            final int index = i;
+
+            runOnce(() -> {
+                output2.setText(output2.getText() + guess.charAt(index));
+
+                if (index + 1 == guess.length()) {
+                    runOnce(() -> {
+                        output2.setText("");
+                        player2Guess(guess);
+                        isAIReadyToGuess = true;
+                    }, Duration.seconds(0.1));
+                }
+
+            }, Duration.seconds(i * 0.1));
+        }
+    }
+
+    private void player1Guess(String guess) {
+        byType(BLOCK)
+                .stream()
+                // bottom row of player1
+                .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") < 6)
+                .forEach(e -> {
+                    if (e.getString("answer").equals(guess)) {
+                        destroyBlock(e);
+                    }
+                });
+    }
+
+    // TODO: remove duplicate
+    private void player2Guess(String guess) {
+        byType(BLOCK)
+                .stream()
+                // bottom row of player2
+                .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") > 6)
+                .forEach(e -> {
+                    if (e.getString("answer").equals(guess)) {
+                        destroyBlock(e);
+                    }
+                });
     }
 
     private void destroyBlock(Entity block) {
@@ -158,6 +251,7 @@ public class MathrisApp extends GameApplication {
                 .filter(e -> e.getInt("x") == blockX && e.getInt("y") < blockY)
                 .toList();
 
+        // column has been cleared
         if (blocks.isEmpty()) {
             var highlight = new Rectangle(120, (MAX_Y+1) * 50, Color.TRANSPARENT);
             highlight.setStroke(Color.YELLOW);
@@ -172,13 +266,11 @@ public class MathrisApp extends GameApplication {
                     .fadeIn(highlight)
                     .buildAndPlay();
 
-            addUINode(highlight, 80 + blockX * 120, 0);
+            addUINode(highlight, 40 + blockX * 120, 0);
 
-//            byType(BLOCK)
-//                    .stream()
-//                    .filter(e -> e.getInt("y") == MAX_Y)
-//                    .forEach(this::destroyBlock);
         } else {
+
+            // drop down blocks above the one destroyed
             blocks.forEach(e -> {
                 var y = e.getInt("y");
 
