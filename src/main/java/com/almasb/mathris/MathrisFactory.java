@@ -69,6 +69,7 @@ public class MathrisFactory implements EntityFactory {
         overlay.setStrokeWidth(3);
         overlay.setStrokeType(StrokeType.INSIDE);
 
+        // TODO: special blocks should be much harder to solve but provide bonuses/powerups
         if (FXGLMath.randomBoolean(0.12)) {
             overlay.setStroke(Color.YELLOW);
 

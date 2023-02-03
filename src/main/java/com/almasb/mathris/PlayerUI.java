@@ -12,7 +12,7 @@ import static com.almasb.mathris.Config.MAX_Y;
  */
 public class PlayerUI extends Parent {
 
-    public PlayerUI() {
+    public PlayerUI(Player player) {
         var bgTopLeft = new Rectangle(40, (MAX_Y+1)*50, Color.TRANSPARENT);
         bgTopLeft.setArcWidth(15);
         bgTopLeft.setArcHeight(15);
@@ -28,6 +28,15 @@ public class PlayerUI extends Parent {
         bgMid.setStrokeWidth(6);
         bgMid.setTranslateX(bgTopLeft.getWidth());
 
-        getChildren().addAll(bgTopLeft, bgMid);
+        var streakFill = new Rectangle(bgTopLeft.getWidth() - bgTopLeft.getStrokeWidth(), bgTopLeft.getHeight(), Color.ORANGERED);
+        streakFill.heightProperty().bind(player.streakProperty().multiply(0.1 * bgTopLeft.getHeight()));
+        streakFill.translateYProperty().bind(bgTopLeft.heightProperty().subtract(streakFill.heightProperty()));
+
+        var streakShadowLeft = new Rectangle(bgTopLeft.getStrokeWidth(), bgTopLeft.getHeight(), Color.ORANGERED.brighter());
+        streakShadowLeft.setTranslateX(5);
+        streakShadowLeft.translateYProperty().bind(streakFill.translateYProperty());
+        streakShadowLeft.heightProperty().bind(streakFill.heightProperty());
+
+        getChildren().addAll(streakFill, streakShadowLeft, bgTopLeft, bgMid);
     }
 }

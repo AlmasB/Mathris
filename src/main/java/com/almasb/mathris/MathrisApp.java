@@ -16,6 +16,8 @@ import javafx.scene.shape.*;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
 
+import java.util.List;
+
 import static com.almasb.mathris.Config.AI_DATA;
 import static com.almasb.mathris.Config.MAX_Y;
 import static com.almasb.mathris.EntityType.*;
@@ -30,6 +32,9 @@ public class MathrisApp extends GameApplication {
     private Text output2;
 
     private boolean isAIReadyToGuess;
+
+    private Player player1;
+    private Player player2;
 
     @Override
     protected void initSettings(GameSettings settings) {
@@ -75,6 +80,8 @@ public class MathrisApp extends GameApplication {
 
     @Override
     protected void initGame() {
+        player1 = new Player();
+        player2 = new Player();
         isAIReadyToGuess = true;
 
         getGameScene().setBackgroundColor(Color.BLACK);
@@ -143,11 +150,11 @@ public class MathrisApp extends GameApplication {
 
         // UI
 
-        var ui = new PlayerUI();
+        var ui1 = new PlayerUI(player1);
 
-        addUINode(ui);
+        addUINode(ui1);
 
-        var ui2 = new PlayerUI();
+        var ui2 = new PlayerUI(player2);
 
         addUINode(ui2, 840, 0);
 
@@ -223,6 +230,7 @@ public class MathrisApp extends GameApplication {
                 .forEach(e -> {
                     if (e.getString("answer").equals(guess)) {
                         destroyBlock(e);
+                        player1.addStreak();
                     }
                 });
     }
@@ -236,11 +244,14 @@ public class MathrisApp extends GameApplication {
                 .forEach(e -> {
                     if (e.getString("answer").equals(guess)) {
                         destroyBlock(e);
+                        player2.addStreak();
                     }
                 });
     }
 
     private void destroyBlock(Entity block) {
+        play("correct.wav");
+
         var blockX = block.getInt("x");
         var blockY = block.getInt("y");
 
@@ -253,38 +264,49 @@ public class MathrisApp extends GameApplication {
 
         // column has been cleared
         if (blocks.isEmpty()) {
-            var highlight = new Rectangle(120, (MAX_Y+1) * 50, Color.TRANSPARENT);
-            highlight.setStroke(Color.YELLOW);
-            highlight.setStrokeWidth(5.5);
-            highlight.setStrokeType(StrokeType.INSIDE);
-
-            animationBuilder()
-                    .onFinished(() -> removeUINode(highlight))
-                    .duration(Duration.seconds(0.11))
-                    .repeat(6)
-                    .autoReverse(true)
-                    .fadeIn(highlight)
-                    .buildAndPlay();
-
-            addUINode(highlight, 40 + blockX * 120, 0);
+            clearColumn(blockX);
 
         } else {
 
             // drop down blocks above the one destroyed
-            blocks.forEach(e -> {
-                var y = e.getInt("y");
-
-                e.setProperty("y", y + 1);
-
-                animationBuilder()
-                        .interpolator(Interpolators.EXPONENTIAL.EASE_OUT())
-                        .duration(Duration.seconds(0.5))
-                        .translate(e)
-                        .from(new Point2D(e.getX(), y * 50))
-                        .to(new Point2D(e.getX(), (y+1) * 50))
-                        .buildAndPlay();
-            });
+            dropDown(blocks);
         }
+    }
+
+    // TODO: allow "sending" new blocks to enemy
+    private void dropDown(List<Entity> columnBlocks) {
+        columnBlocks.forEach(e -> {
+            var y = e.getInt("y");
+
+            e.setProperty("y", y + 1);
+
+            animationBuilder()
+                    .interpolator(Interpolators.EXPONENTIAL.EASE_OUT())
+                    .duration(Duration.seconds(0.5))
+                    .translate(e)
+                    .from(new Point2D(e.getX(), y * 50))
+                    .to(new Point2D(e.getX(), (y+1) * 50))
+                    .buildAndPlay();
+        });
+    }
+
+    private void clearColumn(int blockX) {
+        play("column.wav");
+
+        var highlight = new Rectangle(120, (MAX_Y+1) * 50, Color.TRANSPARENT);
+        highlight.setStroke(Color.YELLOW);
+        highlight.setStrokeWidth(5.5);
+        highlight.setStrokeType(StrokeType.INSIDE);
+
+        animationBuilder()
+                .onFinished(() -> removeUINode(highlight))
+                .duration(Duration.seconds(0.11))
+                .repeat(6)
+                .autoReverse(true)
+                .fadeIn(highlight)
+                .buildAndPlay();
+
+        addUINode(highlight, 40 + blockX * 120, 0);
     }
 
     public static void main(String[] args) {
