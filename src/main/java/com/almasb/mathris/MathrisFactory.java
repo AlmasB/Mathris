@@ -98,6 +98,10 @@ public class MathrisFactory implements EntityFactory {
                         .otherwise(0.7)
         );
 
+        block.getProperties().<String>addListener("question", (old, newValue) -> {
+            text.setText(newValue);
+        });
+
         return block;
     }
 }

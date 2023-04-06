@@ -92,34 +92,16 @@ public class MathrisApp extends GameApplication {
 
             // player 1
             for (int x = 0; x < 6; x++) {
-                var a = random(1, 50);
-                var b = random(1, 50);
+                var block = spawnBlock(x, y);
 
-                spawn("block",
-                        new SpawnData(40 + x * 120, y * 50)
-                                .put("color", Color.DARKGRAY)
-                                .put("x", x)
-                                .put("y", y)
-                                .put("question", "" + a + "+" + b)
-                                .put("answer", "" + (a+b))
-                        //.put("color", FXGLMath.randomColorHSB(0.4, 0.75))
-                );
+                player1.addBlock(block);
             }
 
             // player 2
             for (int x = 7; x < 13; x++) {
-                var a = random(1, 50);
-                var b = random(1, 50);
+                var block = spawnBlock(x, y);
 
-                spawn("block",
-                        new SpawnData(40 + x * 120, y * 50)
-                                .put("color", Color.DARKSEAGREEN)
-                                .put("x", x)
-                                .put("y", y)
-                                .put("question", "" + a + "+" + b)
-                                .put("answer", "" + (a+b))
-                        //.put("color", FXGLMath.randomColorHSB(0.4, 0.75))
-                );
+                player2.addBlock(block);
             }
         }
 
@@ -132,6 +114,20 @@ public class MathrisApp extends GameApplication {
         run(() -> {
             onUpdateAI(aiData);
         }, Duration.seconds(aiData.guessInterval()));
+    }
+
+    private Entity spawnBlock(int x, int y) {
+        var a = random(1, 50);
+        var b = random(1, 50);
+
+        return spawn("block",
+                new SpawnData(40 + x * 120, y * 50)
+                        .put("color", Color.DARKSEAGREEN)
+                        .put("x", x)
+                        .put("y", y)
+                        .put("question", "" + a + "+" + b)
+                        .put("answer", "" + (a+b))
+        );
     }
 
     @Override
@@ -231,6 +227,12 @@ public class MathrisApp extends GameApplication {
                     if (e.getString("answer").equals(guess)) {
                         destroyBlock(e);
                         player1.addStreak();
+
+                        if (player1.isFullStreak()) {
+                            player1.clearStreak();
+
+                            player2.applyNegativeEffect(NegativeEffect.BIG_NUMBERS);
+                        }
                     }
                 });
     }
