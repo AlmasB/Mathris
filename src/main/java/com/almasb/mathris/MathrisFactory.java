@@ -6,8 +6,10 @@ import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.EntityFactory;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.Spawns;
+import com.almasb.fxgl.entity.components.IrremovableComponent;
 import com.almasb.fxgl.ui.FontType;
 import javafx.beans.binding.Bindings;
+import javafx.scene.CacheHint;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
@@ -21,16 +23,28 @@ import static com.almasb.mathris.Config.MAX_Y;
 /**
  * @author Almas Baimagambetov (almaslvl@gmail.com)
  */
-public class MathrisFactory implements EntityFactory {
+public final class MathrisFactory implements EntityFactory {
 
     // TODO: if Type is subtype of Entity, allow
     // entityBuilder() to initialise its values
     // e.g. ::build(player)
     @Spawns("player")
     public Entity newPlayer(SpawnData data) {
+        int minX;
+        int maxX;
+
+        if (data.hasKey("isPlayer1")) {
+            minX = 0;
+            maxX = 5;
+        } else {
+            minX = 7;
+            maxX = 12;
+        }
+
         return entityBuilder(data)
+                .with(new IrremovableComponent())
                 .with(new EffectComponent())
-                .with(new PlayerComponent())
+                .with(new PlayerComponent(minX, maxX))
                 .build();
     }
 
@@ -130,11 +144,13 @@ public class MathrisFactory implements EntityFactory {
         }
 
         var stack = new StackPane(new Pane(bg, polyLeft, polyRight, polyUp, polyDown), text);
+        stack.setCache(true);
+        stack.setCacheHint(CacheHint.SPEED);
 
         var block = entityBuilder(data)
                 .type(EntityType.BLOCK)
                 .view(stack)
-                .view(overlay)
+                //.view(overlay)
                 .with("text", text)
                 .build();
 

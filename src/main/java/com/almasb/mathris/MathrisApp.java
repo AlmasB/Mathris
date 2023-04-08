@@ -6,9 +6,11 @@ import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
+import com.almasb.fxgl.entity.level.Level;
 import com.almasb.fxgl.gameplay.GameDifficulty;
 import com.almasb.fxgl.ui.FontType;
 import javafx.geometry.Point2D;
+import javafx.scene.CacheHint;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.paint.Color;
@@ -39,6 +41,8 @@ public class MathrisApp extends GameApplication {
 
     private List<LevelData> levels;
     private LevelData currentLevel;
+    private int currentLevelIndex;
+    private boolean hasLevelStarted;
 
     @Override
     protected void initSettings(GameSettings settings) {
@@ -55,6 +59,18 @@ public class MathrisApp extends GameApplication {
                 return;
 
             output1.setText(output1.getText().substring(0, output1.getText().length() - 1));
+        });
+
+        onKeyDown(KeyCode.F, () -> {
+            if (player1.getStreak() > 5) {
+                var numBlocks = player1.getStreak() / 3;
+
+                player1.clearStreak();
+
+                for (int i = 0; i < numBlocks; i++) {
+                    player2.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
+                }
+            }
         });
 
         onKeyDown(KeyCode.ENTER, () -> {
@@ -74,9 +90,23 @@ public class MathrisApp extends GameApplication {
             if (Character.isDigit(ch))
                 output1.setText(output1.getText() + event.getCharacter());
         });
+
+        // DEBUG
+        if (!isReleaseMode()) {
+            onKeyDown(KeyCode.L, () -> {
+                nextLevel();
+            });
+
+            onKeyDown(KeyCode.K, () -> {
+                player1.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
+            });
+        }
     }
 
     private void takeUserInputAndGuess() {
+        if (!hasLevelStarted)
+            return;
+
         var answer = output1.getText();
 
         player1.guess(answer);
@@ -86,42 +116,24 @@ public class MathrisApp extends GameApplication {
 
     @Override
     protected void initGame() {
-        levels = new ArrayList<>();
-        levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
-        levels.add(new LevelData(5, 35, List.of(Operation.ADD, Operation.SUB)));
-
-        currentLevel = levels.get(0);
-
-        isAIReadyToGuess = true;
+        initLevels();
 
         getGameScene().setBackgroundColor(Color.BLACK);
 
         getGameWorld().addEntityFactory(new MathrisFactory());
 
-        player1 = spawn("player").getComponent(PlayerComponent.class);
+        player1 = spawn("player", new SpawnData().put("isPlayer1", true)).getComponent(PlayerComponent.class);
         player2 = spawn("player").getComponent(PlayerComponent.class);
 
-        for (int y = 0; y <= MAX_Y; y++) {
+        initAI();
+    }
 
-            // player 1
-            for (int x = 0; x < 6; x++) {
-                var block = spawnBlock(x, y);
-
-                player1.addBlock(block);
-            }
-
-            // player 2
-            for (int x = 7; x < 13; x++) {
-                var block = spawnBlock(x, y);
-
-                player2.addBlock(block);
-            }
-        }
-
+    private void initAI() {
         runOnce(() -> {
 
             // TODO: choice box that takes a list
             getDialogService().showChoiceBox("Select Difficulty", result -> {
+                nextLevel();
 
                 // TODO: allow selecting in Gameplay menu
                 getSettings().setGameDifficulty(result);
@@ -134,18 +146,113 @@ public class MathrisApp extends GameApplication {
                 run(() -> {
                     onUpdateAI(aiData);
                 }, Duration.seconds(aiData.guessInterval()));
+
+                isAIReadyToGuess = true;
             }, GameDifficulty.EASY, GameDifficulty.values());
 
         }, Duration.seconds(0.01));
     }
 
-    private Entity spawnBlock(int x, int y) {
-        return spawn("block",
+    private void initLevels() {
+        levels = new ArrayList<>();
+        levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
+        levels.add(new LevelData(5, 35, List.of(Operation.ADD, Operation.SUB)));
+
+        currentLevelIndex = -1;
+        hasLevelStarted = false;
+    }
+
+    private void nextLevel() {
+        getGameController().gotoLoading(() -> {
+            hasLevelStarted = false;
+
+            player1.reset();
+            player2.reset();
+
+            if (currentLevelIndex < levels.size() - 1) {
+                currentLevel = levels.get(++currentLevelIndex);
+
+                for (int y = 0; y <= MAX_Y; y++) {
+
+                    // player 1 columns [0..5]
+                    for (int x = 0; x < 6; x++) {
+                        var block = createBlock(x, y);
+
+                        player1.addBlock(block);
+                    }
+
+                    // player 2 columns [7..12]
+                    for (int x = 7; x < 13; x++) {
+                        var block = createBlock(x, y);
+
+                        player2.addBlock(block);
+                    }
+                }
+
+                var entities = new ArrayList<Entity>();
+                entities.addAll(player1.getBlocks());
+                entities.addAll(player2.getBlocks());
+
+                var level = new Level(getAppWidth(), getAppHeight(), entities);
+
+                getGameWorld().setLevel(level);
+
+                animateNextLevel();
+            } else {
+                runOnce(() -> showMessage("Demo Over!", getGameController()::gotoMainMenu), Duration.seconds(0.01));
+            }
+        });
+    }
+
+    public Entity createBlock(int x, int y) {
+        return getGameWorld().create("block",
                 new SpawnData(40 + x * 120, y * 50)
                         .put("x", x)
                         .put("y", y)
                         .put("level", currentLevel)
         );
+    }
+
+    private void animateNextLevel() {
+        // World
+        var blocks = byType(BLOCK);
+
+        for (int i = 0; i < blocks.size(); i++) {
+            var block = blocks.get(i);
+
+            animationBuilder()
+                    .delay(Duration.millis(50 + block.getY() / getAppHeight() * 650))
+                    .duration(Duration.seconds(0.9))
+                    .interpolator(Interpolators.ELASTIC.EASE_OUT())
+                    .scale(block)
+                    .origin(new Point2D(60, 25))
+                    .from(new Point2D(0, 0))
+                    .to(new Point2D(1, 1))
+                    .buildAndPlay();
+        }
+
+        // UI
+        var text = getUIFactoryService().newText("Level " + (currentLevelIndex+1), 94);
+        text.setStroke(Color.BLACK);
+        text.setStrokeWidth(5);
+        text.setCache(true);
+        text.setCacheHint(CacheHint.SPEED);
+
+        addUINode(text);
+        centerTextX(text, 0.0, getAppWidth());
+        centerTextY(text, 0.0, 400.0);
+
+        animationBuilder()
+                .delay(Duration.seconds(1))
+                .duration(Duration.seconds(1.6))
+                .onFinished(() -> {
+                    removeUINode(text);
+                    hasLevelStarted = true;
+                })
+                .interpolator(Interpolators.EXPONENTIAL.EASE_IN())
+                .translate(text)
+                .to(new Point2D(text.getTranslateX(), getAppHeight() * 1.2))
+                .buildAndPlay();
     }
 
     @Override
@@ -197,14 +304,16 @@ public class MathrisApp extends GameApplication {
     }
 
     private void onUpdateAI(AIPlayerData data) {
+        if (!hasLevelStarted)
+            return;
+
         if (!isAIReadyToGuess)
             return;
 
         if (FXGLMath.randomBoolean(data.accuracy())) {
-            byType(BLOCK)
+            player2.getBlocks()
                     .stream()
-                    // bottom row of player1
-                    .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") > 6)
+                    .filter(PlayerComponent::isBottomRow)
                     .findAny()
                     .ifPresent(e -> {
                         isAIReadyToGuess = false;
@@ -235,64 +344,15 @@ public class MathrisApp extends GameApplication {
         }
     }
 
-    public void destroyBlock(Entity block) {
-        play("correct.wav");
+    public void onPlayerWon(PlayerComponent player) {
+        if (!hasLevelStarted)
+            return;
 
-        var blockX = block.getInt("x");
-        var blockY = block.getInt("y");
-
-        block.removeFromWorld();
-
-        var blocks = byType(BLOCK)
-                .stream()
-                .filter(e -> e.getInt("x") == blockX && e.getInt("y") < blockY)
-                .toList();
-
-        // column has been cleared
-        if (blocks.isEmpty()) {
-            clearColumn(blockX);
-
+        if (player == player1) {
+            nextLevel();
         } else {
-
-            // drop down blocks above the one destroyed
-            dropDown(blocks);
+            showMessage("You lost!", getGameController()::gotoMainMenu);
         }
-    }
-
-    // TODO: allow "sending" new blocks to enemy
-    private void dropDown(List<Entity> columnBlocks) {
-        columnBlocks.forEach(e -> {
-            var y = e.getInt("y");
-
-            e.setProperty("y", y + 1);
-
-            animationBuilder()
-                    .interpolator(Interpolators.EXPONENTIAL.EASE_OUT())
-                    .duration(Duration.seconds(0.5))
-                    .translate(e)
-                    .from(new Point2D(e.getX(), y * 50))
-                    .to(new Point2D(e.getX(), (y+1) * 50))
-                    .buildAndPlay();
-        });
-    }
-
-    private void clearColumn(int blockX) {
-        play("column.wav");
-
-        var highlight = new Rectangle(120, (MAX_Y+1) * 50, Color.TRANSPARENT);
-        highlight.setStroke(Color.YELLOW);
-        highlight.setStrokeWidth(5.5);
-        highlight.setStrokeType(StrokeType.INSIDE);
-
-        animationBuilder()
-                .onFinished(() -> removeUINode(highlight))
-                .duration(Duration.seconds(0.11))
-                .repeat(6)
-                .autoReverse(true)
-                .fadeIn(highlight)
-                .buildAndPlay();
-
-        addUINode(highlight, 40 + blockX * 120, 0);
     }
 
     public PlayerComponent getOtherPlayer(PlayerComponent player) {
