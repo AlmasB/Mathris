@@ -16,6 +16,7 @@ import javafx.scene.shape.*;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
 
+import java.util.ArrayList;
 import java.util.List;
 
 import static com.almasb.mathris.Config.AI_DATA;
@@ -33,13 +34,18 @@ public class MathrisApp extends GameApplication {
 
     private boolean isAIReadyToGuess;
 
-    private Player player1;
-    private Player player2;
+    private PlayerComponent player1;
+    private PlayerComponent player2;
+
+    private List<LevelData> levels;
+    private LevelData currentLevel;
 
     @Override
     protected void initSettings(GameSettings settings) {
         settings.setWidth(1600);
         settings.setHeight(900);
+        settings.setMainMenuEnabled(false);
+        settings.setGameMenuEnabled(false);
     }
 
     @Override
@@ -52,19 +58,11 @@ public class MathrisApp extends GameApplication {
         });
 
         onKeyDown(KeyCode.ENTER, () -> {
-            var answer = output1.getText();
-
-            player1Guess(answer);
-
-            output1.setText("");
+            takeUserInputAndGuess();
         });
 
         onKeyDown(KeyCode.SPACE, () -> {
-            var answer = output1.getText();
-
-            player1Guess(answer);
-
-            output1.setText("");
+            takeUserInputAndGuess();
         });
 
         getInput().addEventHandler(KeyEvent.KEY_TYPED, event -> {
@@ -78,15 +76,30 @@ public class MathrisApp extends GameApplication {
         });
     }
 
+    private void takeUserInputAndGuess() {
+        var answer = output1.getText();
+
+        player1.guess(answer);
+
+        output1.setText("");
+    }
+
     @Override
     protected void initGame() {
-        player1 = new Player();
-        player2 = new Player();
+        levels = new ArrayList<>();
+        levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
+        levels.add(new LevelData(5, 35, List.of(Operation.ADD, Operation.SUB)));
+
+        currentLevel = levels.get(0);
+
         isAIReadyToGuess = true;
 
         getGameScene().setBackgroundColor(Color.BLACK);
 
         getGameWorld().addEntityFactory(new MathrisFactory());
+
+        player1 = spawn("player").getComponent(PlayerComponent.class);
+        player2 = spawn("player").getComponent(PlayerComponent.class);
 
         for (int y = 0; y <= MAX_Y; y++) {
 
@@ -105,28 +118,33 @@ public class MathrisApp extends GameApplication {
             }
         }
 
-        var aiData = AI_DATA.get(
-                GameDifficulty.NIGHTMARE
-                //getSettings().getGameDifficulty()
-        );
+        runOnce(() -> {
 
-        // start AI
-        run(() -> {
-            onUpdateAI(aiData);
-        }, Duration.seconds(aiData.guessInterval()));
+            // TODO: choice box that takes a list
+            getDialogService().showChoiceBox("Select Difficulty", result -> {
+
+                // TODO: allow selecting in Gameplay menu
+                getSettings().setGameDifficulty(result);
+
+                var aiData = AI_DATA.get(
+                        getSettings().getGameDifficulty()
+                );
+
+                // start AI
+                run(() -> {
+                    onUpdateAI(aiData);
+                }, Duration.seconds(aiData.guessInterval()));
+            }, GameDifficulty.EASY, GameDifficulty.values());
+
+        }, Duration.seconds(0.01));
     }
 
     private Entity spawnBlock(int x, int y) {
-        var a = random(1, 50);
-        var b = random(1, 50);
-
         return spawn("block",
                 new SpawnData(40 + x * 120, y * 50)
-                        .put("color", Color.DARKSEAGREEN)
                         .put("x", x)
                         .put("y", y)
-                        .put("question", "" + a + "+" + b)
-                        .put("answer", "" + (a+b))
+                        .put("level", currentLevel)
         );
     }
 
@@ -169,10 +187,9 @@ public class MathrisApp extends GameApplication {
                     .duration(Duration.seconds(0.5))
                     .autoReverse(true)
                     .repeatInfinitely()
-                    .interpolator(Interpolators.EXPONENTIAL.EASE_OUT())
-                    .animate(separator.strokeProperty())
-                    .from(separator.getStroke())
-                    .to(Color.BLUE)
+                    .interpolator(Interpolators.BACK.EASE_OUT())
+                    .scale(separator)
+                    .to(new Point2D(1.9, 1.9))
                     .buildAndPlay();
 
             addUINode(separator);
@@ -209,7 +226,7 @@ public class MathrisApp extends GameApplication {
                 if (index + 1 == guess.length()) {
                     runOnce(() -> {
                         output2.setText("");
-                        player2Guess(guess);
+                        player2.guess(guess);
                         isAIReadyToGuess = true;
                     }, Duration.seconds(0.1));
                 }
@@ -218,40 +235,7 @@ public class MathrisApp extends GameApplication {
         }
     }
 
-    private void player1Guess(String guess) {
-        byType(BLOCK)
-                .stream()
-                // bottom row of player1
-                .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") < 6)
-                .forEach(e -> {
-                    if (e.getString("answer").equals(guess)) {
-                        destroyBlock(e);
-                        player1.addStreak();
-
-                        if (player1.isFullStreak()) {
-                            player1.clearStreak();
-
-                            player2.applyNegativeEffect(NegativeEffect.BIG_NUMBERS);
-                        }
-                    }
-                });
-    }
-
-    // TODO: remove duplicate
-    private void player2Guess(String guess) {
-        byType(BLOCK)
-                .stream()
-                // bottom row of player2
-                .filter(e -> e.getInt("y") == MAX_Y && e.getInt("x") > 6)
-                .forEach(e -> {
-                    if (e.getString("answer").equals(guess)) {
-                        destroyBlock(e);
-                        player2.addStreak();
-                    }
-                });
-    }
-
-    private void destroyBlock(Entity block) {
+    public void destroyBlock(Entity block) {
         play("correct.wav");
 
         var blockX = block.getInt("x");
@@ -309,6 +293,10 @@ public class MathrisApp extends GameApplication {
                 .buildAndPlay();
 
         addUINode(highlight, 40 + blockX * 120, 0);
+    }
+
+    public PlayerComponent getOtherPlayer(PlayerComponent player) {
+        return player == player1 ? player2 : player1;
     }
 
     public static void main(String[] args) {

@@ -1,6 +1,7 @@
 package com.almasb.mathris;
 
 import com.almasb.fxgl.gameplay.GameDifficulty;
+import javafx.util.Duration;
 
 import java.util.Map;
 
@@ -12,6 +13,9 @@ import static com.almasb.fxgl.gameplay.GameDifficulty.*;
 public final class Config {
 
     public static final int MAX_Y = 15;
+
+    public static final Duration FREEZE_DURATION = Duration.seconds(3);
+    public static final Duration HIDE_DURATION = Duration.seconds(4);
 
     public static final Map<GameDifficulty, AIPlayerData> AI_DATA = Map.of(
             EASY, new AIPlayerData(4, 0.25),

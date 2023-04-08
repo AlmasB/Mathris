@@ -12,7 +12,7 @@ import static com.almasb.mathris.Config.MAX_Y;
  */
 public class PlayerUI extends Parent {
 
-    public PlayerUI(Player player) {
+    public PlayerUI(PlayerComponent player) {
         var bgTopLeft = new Rectangle(40, (MAX_Y+1)*50, Color.TRANSPARENT);
         bgTopLeft.setArcWidth(15);
         bgTopLeft.setArcHeight(15);

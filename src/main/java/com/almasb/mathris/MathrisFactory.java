@@ -1,6 +1,7 @@
 package com.almasb.mathris;
 
 import com.almasb.fxgl.core.math.FXGLMath;
+import com.almasb.fxgl.dsl.components.EffectComponent;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.EntityFactory;
 import com.almasb.fxgl.entity.SpawnData;
@@ -22,8 +23,54 @@ import static com.almasb.mathris.Config.MAX_Y;
  */
 public class MathrisFactory implements EntityFactory {
 
+    // TODO: if Type is subtype of Entity, allow
+    // entityBuilder() to initialise its values
+    // e.g. ::build(player)
+    @Spawns("player")
+    public Entity newPlayer(SpawnData data) {
+        return entityBuilder(data)
+                .with(new EffectComponent())
+                .with(new PlayerComponent())
+                .build();
+    }
+
     @Spawns("block")
     public Entity newBlock(SpawnData data) {
+        LevelData levelData = data.get("level");
+
+        var a = random(levelData.minValue(), levelData.maxValue());
+        var b = random(levelData.minValue(), levelData.maxValue());
+
+        data.put("color", Color.DARKSEAGREEN);
+
+        Operation op;
+
+        if (data.hasKey("op")) {
+            op = data.get("op");
+        } else {
+            op = FXGLMath.random(levelData.availableOperations()).get();
+        }
+
+        // perform OP specific input pre-process
+        if (op == Operation.SUB) {
+            int tempA = Math.max(a, b);
+            int tempB = Math.min(a, b);
+
+            a = tempA;
+            b = tempB;
+        }
+
+        data.put("question", a + op.getStringUI() + b);
+        data.put("answer", op.getFunction().apply(a, b) + "");
+
+
+
+
+
+
+
+
+
         String question = data.get("question");
         Color color = data.get("color");
 
@@ -88,6 +135,7 @@ public class MathrisFactory implements EntityFactory {
                 .type(EntityType.BLOCK)
                 .view(stack)
                 .view(overlay)
+                .with("text", text)
                 .build();
 
         // TODO: extract max Y as Config
