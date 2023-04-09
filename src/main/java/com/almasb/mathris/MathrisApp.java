@@ -4,6 +4,7 @@ import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
+import com.almasb.fxgl.dsl.components.EffectComponent;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.level.Level;
@@ -20,6 +21,7 @@ import javafx.util.Duration;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static com.almasb.mathris.Config.AI_DATA;
 import static com.almasb.mathris.Config.MAX_Y;
@@ -115,6 +117,11 @@ public class MathrisApp extends GameApplication {
     }
 
     @Override
+    protected void initGameVars(Map<String, Object> vars) {
+        vars.put("levelTime", 0.0);
+    }
+
+    @Override
     protected void initGame() {
         initLevels();
 
@@ -157,51 +164,71 @@ public class MathrisApp extends GameApplication {
         levels = new ArrayList<>();
         levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
         levels.add(new LevelData(5, 35, List.of(Operation.ADD, Operation.SUB)));
+        levels.add(new LevelData(1, 45, List.of(Operation.ADD, Operation.SUB, Operation.MUL)));
+        levels.add(new LevelData(1, 60, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV)));
+        levels.add(new LevelData(1, 75, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW)));
+        levels.add(new LevelData(1, 89, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
+        levels.add(new LevelData(11, 99, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
 
         currentLevelIndex = -1;
         hasLevelStarted = false;
     }
 
     private void nextLevel() {
-        getGameController().gotoLoading(() -> {
-            hasLevelStarted = false;
+        if (currentLevelIndex >= 0) {
+            var endLevelMessage = String.format("Level completed in: %.2fsec", getd("levelTime"));
 
-            player1.reset();
-            player2.reset();
+            showMessage(endLevelMessage, () -> {
+                getGameController().gotoLoading(() -> {
+                    startLevel();
+                });
+            });
+        } else {
+            getGameController().gotoLoading(() -> {
+                startLevel();
+            });
+        }
+    }
 
-            if (currentLevelIndex < levels.size() - 1) {
-                currentLevel = levels.get(++currentLevelIndex);
+    private void startLevel() {
+        set("levelTime", 0.0);
+        hasLevelStarted = false;
 
-                for (int y = 0; y <= MAX_Y; y++) {
+        player1.reset();
+        player2.reset();
 
-                    // player 1 columns [0..5]
-                    for (int x = 0; x < 6; x++) {
-                        var block = createBlock(x, y);
+        if (currentLevelIndex < levels.size() - 1) {
+            currentLevel = levels.get(++currentLevelIndex);
 
-                        player1.addBlock(block);
-                    }
+            for (int y = 0; y <= MAX_Y; y++) {
 
-                    // player 2 columns [7..12]
-                    for (int x = 7; x < 13; x++) {
-                        var block = createBlock(x, y);
+                // player 1 columns [0..5]
+                for (int x = 0; x < 6; x++) {
+                    var block = createBlock(x, y);
 
-                        player2.addBlock(block);
-                    }
+                    player1.addBlock(block);
                 }
 
-                var entities = new ArrayList<Entity>();
-                entities.addAll(player1.getBlocks());
-                entities.addAll(player2.getBlocks());
+                // player 2 columns [7..12]
+                for (int x = 7; x < 13; x++) {
+                    var block = createBlock(x, y);
 
-                var level = new Level(getAppWidth(), getAppHeight(), entities);
-
-                getGameWorld().setLevel(level);
-
-                animateNextLevel();
-            } else {
-                runOnce(() -> showMessage("Demo Over!", getGameController()::gotoMainMenu), Duration.seconds(0.01));
+                    player2.addBlock(block);
+                }
             }
-        });
+
+            var entities = new ArrayList<Entity>();
+            entities.addAll(player1.getBlocks());
+            entities.addAll(player2.getBlocks());
+
+            var level = new Level(getAppWidth(), getAppHeight(), entities);
+
+            getGameWorld().setLevel(level);
+
+            animateNextLevel();
+        } else {
+            runOnce(() -> showMessage("Demo Over!", getGameController()::gotoMainMenu), Duration.seconds(0.01));
+        }
     }
 
     public Entity createBlock(int x, int y) {
@@ -303,6 +330,11 @@ public class MathrisApp extends GameApplication {
         }
     }
 
+    @Override
+    protected void onUpdate(double tpf) {
+        inc("levelTime", tpf);
+    }
+
     private void onUpdateAI(AIPlayerData data) {
         if (!hasLevelStarted)
             return;
@@ -310,7 +342,19 @@ public class MathrisApp extends GameApplication {
         if (!isAIReadyToGuess)
             return;
 
-        if (FXGLMath.randomBoolean(data.accuracy())) {
+        var accuracy = data.accuracy();
+
+        if (player2.hasEffect(PlayerComponent.HideEffect.class)) {
+            accuracy -= 0.45;
+        }
+
+        if (player2.hasEffect(PlayerComponent.BigNumbersEffect.class)) {
+            accuracy -= 0.2;
+        }
+
+        accuracy = Math.max(accuracy, 0.0);
+
+        if (FXGLMath.randomBoolean(accuracy)) {
             player2.getBlocks()
                     .stream()
                     .filter(PlayerComponent::isBottomRow)

@@ -18,7 +18,7 @@ public final class Config {
     public static final Duration HIDE_DURATION = Duration.seconds(4);
 
     public static final Map<GameDifficulty, AIPlayerData> AI_DATA = Map.of(
-            EASY, new AIPlayerData(4, 0.25),
+            EASY, new AIPlayerData(3, 0.25),
             MEDIUM, new AIPlayerData(3, 0.5),
             HARD, new AIPlayerData(2, 0.75),
             NIGHTMARE, new AIPlayerData(1, 0.95)

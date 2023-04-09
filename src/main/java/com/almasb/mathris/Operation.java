@@ -15,7 +15,11 @@ public enum Operation {
 
     MUL("*", (a, b) -> a * b),
 
-    DIV("/", (a, b) -> a / b);
+    DIV("/", (a, b) -> a / b),
+
+    POW("^", (a, b) -> (int) Math.pow(a, b)),
+
+    MOD("%", (a, b) -> a % b);
 
     /**
      * How this operation is represented in the UI.

@@ -65,8 +65,40 @@ public final class MathrisFactory implements EntityFactory {
             op = FXGLMath.random(levelData.availableOperations()).get();
         }
 
+        // TODO: increase occurrence of certain answers for chaining negative effects
+
         // perform OP specific input pre-process
         if (op == Operation.SUB) {
+            int tempA = Math.max(a, b);
+            int tempB = Math.min(a, b);
+
+            a = tempA;
+            b = tempB;
+        }
+
+        if (op == Operation.MUL) {
+            a = random(0, 25);
+            b = random(0, 25);
+        }
+
+        if (op == Operation.DIV) {
+            int tempA = Math.max(a, b);
+            int tempB = Math.min(a, b);
+
+            a = tempA;
+            b = tempB;
+
+            while (a % b != 0) {
+                a++;
+            }
+        }
+
+        if (op == Operation.POW) {
+            a = random(0, 10);
+            b = random(0, 3);
+        }
+
+        if (op == Operation.MOD) {
             int tempA = Math.max(a, b);
             int tempB = Math.min(a, b);
 

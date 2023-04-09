@@ -100,8 +100,6 @@ public final class PlayerComponent extends Component {
         if (effect == NegativeEffect.BIG_NUMBERS) {
 
             // TODO: random 10, not top 10
-            // TODO: AI needs to have a penalty score for big numbers, otherwise no difference
-            // and for hide effect
             blocks.stream()
                     .limit(10)
                     .forEach(block -> {
@@ -140,16 +138,31 @@ public final class PlayerComponent extends Component {
         }
     }
 
+    private int numCorrectGuesses = 0;
+    private int previousColumn = -1;
+
     public void guess(String guess) {
         if (effects.hasEffect(FreezeEffect.class))
             return;
+
+        numCorrectGuesses = 0;
 
         blocks.stream()
                 .filter(PlayerComponent::isBottomRow)
                 .forEach(e -> {
                     if (e.getString("answer").equals(guess)) {
+                        numCorrectGuesses++;
+                        var columnHit = e.getInt("x");
+
+                        // incentive to aim horizontally
+                        if (columnHit != previousColumn) {
+                            addStreak();
+                        }
+
                         destroyBlock(e);
                         addStreak();
+
+                        previousColumn = columnHit;
 
                         if (isFullStreak()) {
                             clearStreak();
@@ -158,6 +171,10 @@ public final class PlayerComponent extends Component {
                         }
                     }
                 });
+
+        if (numCorrectGuesses >= 2) {
+            app.getOtherPlayer(this).applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
+        }
     }
 
     private List<Entity> getColumn(int x) {
@@ -226,6 +243,10 @@ public final class PlayerComponent extends Component {
         addUINode(highlight, 40 + blockX * 120, 0);
     }
 
+    public <T extends Effect> boolean hasEffect(Class<T> effectClass) {
+        return effects.hasEffect(effectClass);
+    }
+
     public static boolean isBottomRow(Entity block) {
         return block.getInt("y") == MAX_Y;
     }
@@ -274,6 +295,23 @@ public final class PlayerComponent extends Component {
 
                 text.setText(b.getString("question"));
             });
+        }
+    }
+
+    public class BigNumbersEffect extends Effect {
+
+        public BigNumbersEffect() {
+            super(Config.HIDE_DURATION);
+        }
+
+        @Override
+        public void onStart(Entity entity) {
+
+        }
+
+        @Override
+        public void onEnd(Entity entity) {
+
         }
     }
 }
