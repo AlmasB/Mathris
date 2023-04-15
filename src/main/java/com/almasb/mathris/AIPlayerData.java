@@ -8,5 +8,8 @@ public record AIPlayerData(
         double guessInterval,
 
         // in [0..1], 0 = 0%, 1 = 100% correct
-        double accuracy
+        double baseAccuracy,
+
+        // in [0..1], 0 = 0%, 1 = 100%
+        double accuracyDropPerDigit
 ) { }

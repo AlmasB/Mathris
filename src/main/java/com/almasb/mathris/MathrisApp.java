@@ -4,7 +4,6 @@ import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
-import com.almasb.fxgl.dsl.components.EffectComponent;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.level.Level;
@@ -29,6 +28,10 @@ import static com.almasb.mathris.EntityType.*;
 import static com.almasb.fxgl.dsl.FXGL.*;
 
 /**
+ * TODO:
+ * - score needs to affect something
+ * - Big Numbers effect needs to be applied through gameplay
+ *
  * @author Almas Baimagambetov (almaslvl@gmail.com)
  */
 public class MathrisApp extends GameApplication {
@@ -123,6 +126,8 @@ public class MathrisApp extends GameApplication {
 
     @Override
     protected void initGame() {
+        getSettings().setGlobalSoundVolume(0);
+
         initLevels();
 
         getGameScene().setBackgroundColor(Color.BLACK);
@@ -306,6 +311,24 @@ public class MathrisApp extends GameApplication {
 
         addUINode(ui2, 840, 0);
 
+        // Score
+        var score1Text = getUIFactoryService().newText(
+                player1.scoreProperty().asString()
+        );
+        score1Text.setFill(Color.GOLD);
+
+        score1Text.layoutBoundsProperty().addListener((obs, old, newBounds) -> {
+            score1Text.setTranslateX(755 - newBounds.getWidth());
+        });
+
+        var score2Text = getUIFactoryService().newText(
+                player2.scoreProperty().asString()
+        );
+        score2Text.setFill(Color.GOLD);
+
+        addUINode(score1Text, 755 - score1Text.getLayoutBounds().getWidth(), getAppHeight() - 30);
+        addUINode(score2Text, 840, getAppHeight() - 30);
+
         for (int i = 0; i < 50; i++) {
             var length = getAppHeight() / 50;
 
@@ -342,30 +365,39 @@ public class MathrisApp extends GameApplication {
         if (!isAIReadyToGuess)
             return;
 
-        var accuracy = data.accuracy();
+        var accuracy = data.baseAccuracy();
 
         if (player2.hasEffect(PlayerComponent.HideEffect.class)) {
             accuracy -= 0.45;
         }
 
-        if (player2.hasEffect(PlayerComponent.BigNumbersEffect.class)) {
-            accuracy -= 0.2;
-        }
+        var block = player2.getBlocks()
+                .stream()
+                .filter(PlayerComponent::isBottomRow)
+                .findAny();
+
+        if (block.isEmpty())
+            return;
+
+        var answer = block.get().getString("answer");
+        var numDigits = answer.length();
+
+        accuracy -= numDigits *
+                AI_DATA.get(getSettings().getGameDifficulty()).accuracyDropPerDigit();
 
         accuracy = Math.max(accuracy, 0.0);
 
+        isAIReadyToGuess = false;
+
         if (FXGLMath.randomBoolean(accuracy)) {
-            player2.getBlocks()
-                    .stream()
-                    .filter(PlayerComponent::isBottomRow)
-                    .findAny()
-                    .ifPresent(e -> {
-                        isAIReadyToGuess = false;
-                        animateAI(e.getString("answer"));
-                    });
+            animateAI(answer);
         } else {
-            isAIReadyToGuess = false;
-            animateAI("" + FXGLMath.random(1, 9999));
+            var wrongAnswerMax = "";
+            for (int i = 0; i < numDigits; i++) {
+                wrongAnswerMax += "9";
+            }
+
+            animateAI("" + FXGLMath.random(1, Integer.parseInt(wrongAnswerMax)));
         }
     }
 

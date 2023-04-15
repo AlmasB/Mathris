@@ -7,6 +7,7 @@ import com.almasb.fxgl.dsl.components.EffectComponent;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.component.Component;
 import com.almasb.fxgl.entity.component.Required;
+import com.almasb.fxgl.time.LocalTimer;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.geometry.Point2D;
@@ -22,6 +23,7 @@ import java.util.List;
 import java.util.stream.IntStream;
 
 import static com.almasb.fxgl.dsl.FXGL.*;
+import static com.almasb.mathris.Config.*;
 import static com.almasb.mathris.Config.MAX_Y;
 import static com.almasb.mathris.EntityType.BLOCK;
 
@@ -37,6 +39,10 @@ public final class PlayerComponent extends Component {
 
     // [0..10]
     private IntegerProperty streak = new SimpleIntegerProperty(0);
+    private IntegerProperty score = new SimpleIntegerProperty(0);
+
+    // in sec
+    private LocalTimer scoreTimer = getGameTimer().newLocalTimer();
 
     private List<Entity> blocks = new ArrayList<>();
 
@@ -57,11 +63,22 @@ public final class PlayerComponent extends Component {
         return blocks;
     }
 
+    public IntegerProperty scoreProperty() {
+        return score;
+    }
+
     public IntegerProperty streakProperty() {
         return streak;
     }
 
     public void addStreak() {
+        var isBonus = !scoreTimer.elapsed(BONUS_SCORE_INTERVAL);
+        var multiplier = isBonus ? SCORE_MULTIPLIER : 1;
+
+        score.set(score.get() + BASE_SCORE * multiplier);
+
+        scoreTimer.capture();
+
         if (isFullStreak())
             return;
 
@@ -93,6 +110,8 @@ public final class PlayerComponent extends Component {
         blocks.clear();
         clearStreak();
 
+        score.set(0);
+
         effects.endAllEffects();
     }
 
@@ -114,8 +133,11 @@ public final class PlayerComponent extends Component {
                             var a = random(100, 500);
                             var b = random(100, 500);
 
-                            block.setProperty("question", "" + a + "+" + b);
-                            block.setProperty("answer", "" + (a+b));
+                            var op = Operation.ADD;
+
+                            block.setProperty("question", a + op.getStringUI() + b);
+                            block.setProperty("answer", op.getFunction().apply(a, b) + "");
+
                         }, Duration.seconds(0.35));
                     });
         } else if (effect == NegativeEffect.FREEZE) {
@@ -254,7 +276,7 @@ public final class PlayerComponent extends Component {
     private class FreezeEffect extends Effect {
 
         public FreezeEffect() {
-            super(Config.FREEZE_DURATION);
+            super(FREEZE_DURATION);
         }
 
         @Override
@@ -275,7 +297,7 @@ public final class PlayerComponent extends Component {
     public class HideEffect extends Effect {
 
         public HideEffect() {
-            super(Config.HIDE_DURATION);
+            super(HIDE_DURATION);
         }
 
         @Override
@@ -301,7 +323,7 @@ public final class PlayerComponent extends Component {
     public class BigNumbersEffect extends Effect {
 
         public BigNumbersEffect() {
-            super(Config.HIDE_DURATION);
+            super(HIDE_DURATION);
         }
 
         @Override
