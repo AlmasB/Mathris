@@ -4,10 +4,12 @@ import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
+import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.level.Level;
 import com.almasb.fxgl.gameplay.GameDifficulty;
+import com.almasb.fxgl.input.InputModifier;
 import com.almasb.fxgl.ui.FontType;
 import javafx.geometry.Point2D;
 import javafx.scene.CacheHint;
@@ -19,6 +21,7 @@ import javafx.scene.text.Text;
 import javafx.util.Duration;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -49,12 +52,18 @@ public class MathrisApp extends GameApplication {
     private int currentLevelIndex;
     private boolean hasLevelStarted;
 
+    private boolean isCodefest = true;
+
     @Override
     protected void initSettings(GameSettings settings) {
         settings.setWidth(1600);
         settings.setHeight(900);
         settings.setMainMenuEnabled(false);
         settings.setGameMenuEnabled(false);
+
+        if (isCodefest) {
+            settings.addEngineService(CodefestService.class);
+        }
     }
 
     @Override
@@ -98,9 +107,8 @@ public class MathrisApp extends GameApplication {
 
         // DEBUG
         if (!isReleaseMode()) {
-            onKeyDown(KeyCode.L, () -> {
-                nextLevel();
-            });
+            onKeyBuilder(KeyCode.L, InputModifier.CTRL)
+                    .onActionBegin(() -> nextLevel());
 
             onKeyDown(KeyCode.K, () -> {
                 player1.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
@@ -117,6 +125,13 @@ public class MathrisApp extends GameApplication {
         player1.guess(answer);
 
         output1.setText("");
+    }
+
+    @Override
+    protected void onPreInit() {
+        FXGL.getService(CodefestService.class).setCallback(() -> {
+            FXGL.getExecutor().startAsyncFX(() -> nextLevel());
+        });
     }
 
     @Override
@@ -143,9 +158,17 @@ public class MathrisApp extends GameApplication {
     private void initAI() {
         runOnce(() -> {
 
-            // TODO: choice box that takes a list
-            getDialogService().showChoiceBox("Select Difficulty", result -> {
+            getDialogService().showChoiceBox("Select Difficulty", Arrays.asList(GameDifficulty.values()), result -> {
                 nextLevel();
+
+                // start codefest
+                if (isCodefest) {
+                    runOnce(() -> {
+                        FXGL.run(() -> {
+                            FXGL.getExecutor().startAsync(() -> FXGL.getService(CodefestService.class).check());
+                        }, Duration.seconds(2));
+                    }, Duration.seconds(5));
+                }
 
                 // TODO: allow selecting in Gameplay menu
                 getSettings().setGameDifficulty(result);
@@ -160,7 +183,7 @@ public class MathrisApp extends GameApplication {
                 }, Duration.seconds(aiData.guessInterval()));
 
                 isAIReadyToGuess = true;
-            }, GameDifficulty.EASY, GameDifficulty.values());
+            });
 
         }, Duration.seconds(0.01));
     }
