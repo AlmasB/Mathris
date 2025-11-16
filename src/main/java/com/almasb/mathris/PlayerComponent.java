@@ -8,6 +8,7 @@ import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.component.Component;
 import com.almasb.fxgl.entity.component.Required;
 import com.almasb.fxgl.time.LocalTimer;
+import com.almasb.fxgl.time.TimerAction;
 import javafx.beans.property.IntegerProperty;
 import javafx.beans.property.SimpleIntegerProperty;
 import javafx.geometry.Point2D;
@@ -46,6 +47,8 @@ public final class PlayerComponent extends Component {
 
     private List<Entity> blocks = new ArrayList<>();
 
+    private List<TimerAction> scoreEvents = new ArrayList<>();
+
     // columns
     private int minX;
     private int maxX;
@@ -53,6 +56,25 @@ public final class PlayerComponent extends Component {
     public PlayerComponent(int minX, int maxX) {
         this.minX = minX;
         this.maxX = maxX;
+    }
+
+    public void resetScoreEvents() {
+        scoreEvents.forEach(TimerAction::expire);
+        scoreEvents.clear();
+
+        score.set(0);
+
+        for (int i = 10000; i <= 30000; i += 10000) {
+            var scoreMilestone = i;
+
+            var action = eventBuilder()
+                    .when(() -> score.get() >= scoreMilestone)
+                    .limit(1)
+                    .thenRun(() -> app.getOtherPlayer(this).applyNegativeEffect(NegativeEffect.BIG_NUMBERS))
+                    .buildAndStart();
+
+            scoreEvents.add(action);
+        }
     }
 
     public void addBlock(Entity block) {
@@ -110,7 +132,7 @@ public final class PlayerComponent extends Component {
         blocks.clear();
         clearStreak();
 
-        score.set(0);
+        resetScoreEvents();
 
         effects.endAllEffects();
     }
@@ -118,9 +140,9 @@ public final class PlayerComponent extends Component {
     public void applyNegativeEffect(NegativeEffect effect) {
         if (effect == NegativeEffect.BIG_NUMBERS) {
 
-            // TODO: random 10, not top 10
+            // TODO: random 5, not top 5
             blocks.stream()
-                    .limit(10)
+                    .limit(5)
                     .forEach(block -> {
                         animationBuilder()
                                 .duration(Duration.seconds(0.35))
@@ -317,23 +339,6 @@ public final class PlayerComponent extends Component {
 
                 text.setText(b.getString("question"));
             });
-        }
-    }
-
-    public class BigNumbersEffect extends Effect {
-
-        public BigNumbersEffect() {
-            super(HIDE_DURATION);
-        }
-
-        @Override
-        public void onStart(Entity entity) {
-
-        }
-
-        @Override
-        public void onEnd(Entity entity) {
-
         }
     }
 }

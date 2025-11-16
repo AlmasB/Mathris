@@ -4,7 +4,6 @@ import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
-import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.level.Level;
@@ -31,9 +30,13 @@ import static com.almasb.mathris.EntityType.*;
 import static com.almasb.fxgl.dsl.FXGL.*;
 
 /**
- * TODO:
- * - score needs to affect something
- * - Big Numbers effect needs to be applied through gameplay
+ * The 1.0 implementation is now complete.
+ *
+ * Negative effects against the other player:
+ * - Freeze when a column is cleared
+ * - Hide Numbers when a streak of 10 is reached
+ * - Extra Blocks when 2 blocks are cleared at once (horizontally)
+ * - Big Numbers when score passes 10k, 20k, and 30k
  *
  * @author Almas Baimagambetov (almaslvl@gmail.com)
  */
@@ -52,18 +55,12 @@ public class MathrisApp extends GameApplication {
     private int currentLevelIndex;
     private boolean hasLevelStarted;
 
-    private boolean isCodefest = true;
-
     @Override
     protected void initSettings(GameSettings settings) {
         settings.setWidth(1600);
         settings.setHeight(900);
         settings.setMainMenuEnabled(false);
         settings.setGameMenuEnabled(false);
-
-        if (isCodefest) {
-            settings.addEngineService(CodefestService.class);
-        }
     }
 
     @Override
@@ -73,18 +70,6 @@ public class MathrisApp extends GameApplication {
                 return;
 
             output1.setText(output1.getText().substring(0, output1.getText().length() - 1));
-        });
-
-        onKeyDown(KeyCode.F, () -> {
-            if (player1.getStreak() > 5) {
-                var numBlocks = player1.getStreak() / 3;
-
-                player1.clearStreak();
-
-                for (int i = 0; i < numBlocks; i++) {
-                    player2.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
-                }
-            }
         });
 
         onKeyDown(KeyCode.ENTER, () -> {
@@ -113,6 +98,22 @@ public class MathrisApp extends GameApplication {
             onKeyDown(KeyCode.K, () -> {
                 player1.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
             });
+
+            onKeyDown(KeyCode.J, () -> {
+                player1.applyNegativeEffect(NegativeEffect.BIG_NUMBERS);
+            });
+
+            onKeyDown(KeyCode.F, () -> {
+                if (player1.getStreak() > 5) {
+                    var numBlocks = player1.getStreak() / 3;
+
+                    player1.clearStreak();
+
+                    for (int i = 0; i < numBlocks; i++) {
+                        player2.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
+                    }
+                }
+            });
         }
     }
 
@@ -125,13 +126,6 @@ public class MathrisApp extends GameApplication {
         player1.guess(answer);
 
         output1.setText("");
-    }
-
-    @Override
-    protected void onPreInit() {
-        FXGL.getService(CodefestService.class).setCallback(() -> {
-            FXGL.getExecutor().startAsyncFX(() -> nextLevel());
-        });
     }
 
     @Override
@@ -161,16 +155,6 @@ public class MathrisApp extends GameApplication {
             getDialogService().showChoiceBox("Select Difficulty", Arrays.asList(GameDifficulty.values()), result -> {
                 nextLevel();
 
-                // start codefest
-                if (isCodefest) {
-                    runOnce(() -> {
-                        FXGL.run(() -> {
-                            FXGL.getExecutor().startAsync(() -> FXGL.getService(CodefestService.class).check());
-                        }, Duration.seconds(2));
-                    }, Duration.seconds(5));
-                }
-
-                // TODO: allow selecting in Gameplay menu
                 getSettings().setGameDifficulty(result);
 
                 var aiData = AI_DATA.get(
@@ -255,7 +239,7 @@ public class MathrisApp extends GameApplication {
 
             animateNextLevel();
         } else {
-            runOnce(() -> showMessage("Demo Over!", getGameController()::gotoMainMenu), Duration.seconds(0.01));
+            runOnce(() -> showMessage("Demo Over!\nPress OK to exit", getGameController()::exit), Duration.seconds(0.01));
         }
     }
 
@@ -450,7 +434,10 @@ public class MathrisApp extends GameApplication {
         if (player == player1) {
             nextLevel();
         } else {
-            showMessage("You lost!", getGameController()::gotoMainMenu);
+            showMessage("You lost!\nPress OK to restart", () -> {
+                currentLevelIndex = -1;
+                nextLevel();
+            });
         }
     }
 
