@@ -4,12 +4,14 @@ import com.almasb.fxgl.animation.Interpolators;
 import com.almasb.fxgl.app.GameApplication;
 import com.almasb.fxgl.app.GameSettings;
 import com.almasb.fxgl.core.math.FXGLMath;
+import com.almasb.fxgl.core.util.ResourceExtractor;
 import com.almasb.fxgl.dsl.FXGL;
 import com.almasb.fxgl.entity.Entity;
 import com.almasb.fxgl.entity.SpawnData;
 import com.almasb.fxgl.entity.level.Level;
 import com.almasb.fxgl.gameplay.GameDifficulty;
-import com.almasb.fxgl.input.InputModifier;
+import com.almasb.fxgl.input.InputSequence;
+import com.almasb.fxgl.input.UserAction;
 import com.almasb.fxgl.ui.FontType;
 import javafx.geometry.Point2D;
 import javafx.scene.CacheHint;
@@ -20,8 +22,10 @@ import javafx.scene.shape.*;
 import javafx.scene.text.Text;
 import javafx.util.Duration;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -52,18 +56,12 @@ public class MathrisApp extends GameApplication {
     private int currentLevelIndex;
     private boolean hasLevelStarted;
 
-    private boolean isCodefest = true;
-
     @Override
     protected void initSettings(GameSettings settings) {
         settings.setWidth(1600);
         settings.setHeight(900);
         settings.setMainMenuEnabled(false);
         settings.setGameMenuEnabled(false);
-
-        if (isCodefest) {
-            settings.addEngineService(CodefestService.class);
-        }
     }
 
     @Override
@@ -107,12 +105,16 @@ public class MathrisApp extends GameApplication {
 
         // DEBUG
         if (!isReleaseMode()) {
-            onKeyBuilder(KeyCode.L, InputModifier.CTRL)
-                    .onActionBegin(() -> nextLevel());
+            getInput().addAction(new UserAction("Next Level") {
+                @Override
+                protected void onActionBegin() {
+                    nextLevel();
+                }
+            }, new InputSequence(KeyCode.N, KeyCode.E, KeyCode.X, KeyCode.T));
 
-            onKeyDown(KeyCode.K, () -> {
-                player1.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
-            });
+//            onKeyDown(KeyCode.K, () -> {
+//                player1.applyNegativeEffect(NegativeEffect.EXTRA_BLOCKS);
+//            });
         }
     }
 
@@ -129,9 +131,9 @@ public class MathrisApp extends GameApplication {
 
     @Override
     protected void onPreInit() {
-        FXGL.getService(CodefestService.class).setCallback(() -> {
-            FXGL.getExecutor().startAsyncFX(() -> nextLevel());
-        });
+//        FXGL.getService(CodefestService.class).setCallback(() -> {
+//            FXGL.getExecutor().startAsyncFX(() -> nextLevel());
+//        });
     }
 
     @Override
@@ -158,20 +160,9 @@ public class MathrisApp extends GameApplication {
     private void initAI() {
         runOnce(() -> {
 
-            getDialogService().showChoiceBox("Select Difficulty", Arrays.asList(GameDifficulty.values()), result -> {
+            getDialogService().showMessageBox("Instructions:\nBeat the game!\nPress OK to start", () -> {
                 nextLevel();
-
-                // start codefest
-                if (isCodefest) {
-                    runOnce(() -> {
-                        FXGL.run(() -> {
-                            FXGL.getExecutor().startAsync(() -> FXGL.getService(CodefestService.class).check());
-                        }, Duration.seconds(2));
-                    }, Duration.seconds(5));
-                }
-
-                // TODO: allow selecting in Gameplay menu
-                getSettings().setGameDifficulty(result);
+                getSettings().setGameDifficulty(GameDifficulty.NIGHTMARE);
 
                 var aiData = AI_DATA.get(
                         getSettings().getGameDifficulty()
@@ -190,13 +181,13 @@ public class MathrisApp extends GameApplication {
 
     private void initLevels() {
         levels = new ArrayList<>();
-        levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
+//        levels.add(new LevelData(1, 30, List.of(Operation.ADD)));
         levels.add(new LevelData(5, 35, List.of(Operation.ADD, Operation.SUB)));
-        levels.add(new LevelData(1, 45, List.of(Operation.ADD, Operation.SUB, Operation.MUL)));
-        levels.add(new LevelData(1, 60, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV)));
-        levels.add(new LevelData(1, 75, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW)));
-        levels.add(new LevelData(1, 89, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
-        levels.add(new LevelData(11, 99, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
+//        levels.add(new LevelData(1, 45, List.of(Operation.ADD, Operation.SUB, Operation.MUL)));
+//        levels.add(new LevelData(1, 60, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV)));
+//        levels.add(new LevelData(1, 75, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW)));
+//        levels.add(new LevelData(1, 89, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
+//        levels.add(new LevelData(11, 99, List.of(Operation.ADD, Operation.SUB, Operation.MUL, Operation.DIV, Operation.POW, Operation.MOD)));
 
         currentLevelIndex = -1;
         hasLevelStarted = false;
@@ -255,7 +246,28 @@ public class MathrisApp extends GameApplication {
 
             animateNextLevel();
         } else {
-            runOnce(() -> showMessage("Demo Over!", getGameController()::gotoMainMenu), Duration.seconds(0.01));
+            runOnce(() -> showMessage(
+                    "Congratulations, you beat the game!\n" +
+                    "You won Codefest X-mas!\n" +
+                    "Just kidding...\n" +
+                    "I've unlocked the puzzles in the game folder\n" +
+                    "Press OK to open the document",
+                    () -> {
+                        try {
+                            var url = ResourceExtractor.extract(getAssetLoader().getURL("/assets/puzzles/PuzzlesDec2025.docx"), "Puzzles.docx");
+
+                            var file = Files.copy(Paths.get(url.toURI()), Paths.get("Puzzles.docx"), StandardCopyOption.REPLACE_EXISTING);
+
+                            FXGL.getFXApp().getHostServices().showDocument(file.toString());
+
+                            runOnce(() -> getGameController().exit(), Duration.seconds(7));
+
+                        } catch (Exception e) {
+
+                            showMessage("Could not extract data. Ask Almas", () -> getGameController().exit());
+                        }
+
+            }), Duration.seconds(0.01));
         }
     }
 
@@ -450,7 +462,10 @@ public class MathrisApp extends GameApplication {
         if (player == player1) {
             nextLevel();
         } else {
-            showMessage("You lost!", getGameController()::gotoMainMenu);
+            showMessage("You lost! Try again", () -> {
+                currentLevelIndex--;
+                nextLevel();
+            });
         }
     }
 
